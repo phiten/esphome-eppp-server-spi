@@ -1,0 +1,3 @@
+dependencies:
+  espressif/eppp_link: "1.1.5"
+  # idf: ">=5.0"   # uncomment/adjust if you need to pin an IDF version range
