@@ -6,6 +6,7 @@
 #include "esphome/components/wifi/wifi_component.h"
 
 #include "esp_err.h"
+#include "esp_netif_ip_addr.h"  // esp_ip4_addr_t, ESP_IP4TOADDR -- eppp_link.h assumes these are already visible
 
 extern "C" {
 #include "eppp_link.h"
@@ -20,36 +21,34 @@ void EPPPServerComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up EPPP SPI server...");
 
   // ---------------------------------------------------------------------
-  // TODO: verify against the ACTUAL vendored header before relying on this.
-  // Open (after a build that has fetched the dependency):
-  //   <build_dir>/managed_components/espressif__eppp_link/include/eppp_link.h
-  // and confirm:
-  //   - the exact name/shape of the config struct (eppp_config_t or similar)
-  //   - how it distinguishes SPI vs UART vs SDIO transport config
-  //   - the field names for MOSI/MISO/SCLK/CS and the handshake/interrupt pin
-  //   - whether there's a default-config helper/macro to start from
-  //
-  // The block below is written to the *documented* eppp_init() contract
-  // (endpoint role + config pointer -> esp_netif_t*), but the internal
-  // struct field names are almost certainly going to need adjusting to
-  // match your vendored version. Treat this as a compile-time TODO, not
-  // as verified-working code.
+  // Struct fields confirmed from the vendored eppp_link.h / eppp_transport_spi.h
+  // (espressif/eppp_link, as fetched into managed_components/).
   // ---------------------------------------------------------------------
+  eppp_config_t config = {};  // zero-init: unset fields (e.g. is_master) default sanely
 
-  eppp_config_t config = {};  // TODO: replace with real default-config call if one exists
+  config.transport = EPPP_TRANSPORT_SPI;
 
-  // TODO: set transport = SPI and fill in the pins, e.g. something along the
-  // lines of (field names are illustrative, NOT confirmed):
-  //
-  //   config.transport_config.spi.pin_mosi = this->mosi_pin_;
-  //   config.transport_config.spi.pin_miso = this->miso_pin_;
-  //   config.transport_config.spi.pin_sclk = this->sclk_pin_;
-  //   config.transport_config.spi.pin_cs   = this->cs_pin_;
-  //   config.transport_config.spi.pin_intr = this->handshake_pin_;  // handshake/data-ready
-  //
-  // and match whatever role/task/queue defaults the reference
-  // esp32-spi-eppp-server firmware used, since you've already confirmed
-  // those work on this hardware in Phase 0.
+  config.spi.host = 1;  // SPI2_HOST/HSPI -- matches eppp_link's own default; adjust if your
+                         // Phase-0 firmware used a different SPI peripheral
+  config.spi.is_master = false;  // this device is the SPI SLAVE: the external MCU drives the bus
+  config.spi.mosi = this->mosi_pin_;
+  config.spi.miso = this->miso_pin_;
+  config.spi.sclk = this->sclk_pin_;
+  config.spi.cs = this->cs_pin_;
+  config.spi.intr = this->handshake_pin_;  // data-ready/handshake line, slave -> master
+  config.spi.freq = 16 * 1000 * 1000;      // matches eppp_link's own default; lower if you see errors
+  config.spi.input_delay_ns = 0;
+  config.spi.cs_ena_pretrans = 0;
+  config.spi.cs_ena_posttrans = 0;
+
+  config.task.run_task = true;
+  config.task.stack_size = 4096;
+  config.task.priority = 8;
+
+  config.ppp.our_ip4_addr.addr = EPPP_DEFAULT_SERVER_IP();
+  config.ppp.their_ip4_addr.addr = EPPP_DEFAULT_CLIENT_IP();
+  config.ppp.netif_prio = 0;
+  config.ppp.netif_description = nullptr;
 
   this->eppp_netif_ = eppp_init(EPPP_SERVER, &config);
   if (this->eppp_netif_ == nullptr) {

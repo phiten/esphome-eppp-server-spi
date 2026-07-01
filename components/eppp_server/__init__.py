@@ -3,7 +3,7 @@ import esphome.config_validation as cv
 from esphome.const import CONF_ID
 from esphome.core import CORE
 
-CODEOWNERS = ["@phiten"]
+#CODEOWNERS = ["@your-github-handle"]
 #DEPENDENCIES = ["wifi"]
 
 eppp_server_ns = cg.esphome_ns.namespace("eppp_server")
@@ -66,4 +66,8 @@ async def to_code(config):
 
         add_idf_sdkconfig_option("CONFIG_LWIP_IP_FORWARD", True)
         add_idf_sdkconfig_option("CONFIG_LWIP_IPV4_NAPT", True)
-        add_idf_sdkconfig_option("CONFIG_EPPP_LINK_SPI", True)
+        # NOTE: this is a Kconfig *choice* among UART/SPI/SDIO/ETH transports.
+        # eppp_init() resolves its transport via a compile-time macro gated on
+        # this exact symbol name -- getting this wrong silently falls back to
+        # UART regardless of what eppp_config_t.transport is set to at runtime.
+        add_idf_sdkconfig_option("CONFIG_EPPP_LINK_DEVICE_SPI", True)
