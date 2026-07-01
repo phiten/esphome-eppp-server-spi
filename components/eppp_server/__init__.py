@@ -3,8 +3,8 @@ import esphome.config_validation as cv
 from esphome.const import CONF_ID
 from esphome.core import CORE
 
-CODEOWNERS = ["@your-github-handle"]
-DEPENDENCIES = ["wifi"]
+CODEOWNERS = ["@phiten"]
+#DEPENDENCIES = ["wifi"]
 
 eppp_server_ns = cg.esphome_ns.namespace("eppp_server")
 EPPPServerComponent = eppp_server_ns.class_("EPPPServerComponent", cg.Component)
@@ -55,7 +55,14 @@ async def to_code(config):
     # (Kept here so users don't have to remember to set these by hand.)
     cg.add_define("USE_EPPP_SERVER")
     if CORE.is_esp32 and not CORE.using_arduino:
-        from esphome.components.esp32 import add_idf_sdkconfig_option
+        from esphome.components.esp32 import add_idf_component, add_idf_sdkconfig_option
+
+        # Confirmed signature (2026.6.x):
+        #   add_idf_component(*, name: str, repo: str | None = None,
+        #                      ref: str | None = None, path: str | None = None)
+        # No `repo` -> resolved against the ESP Component Registry by `name`.
+        # `ref` here pins the registry version constraint.
+        add_idf_component(name="espressif/eppp_link", ref="1.1.5")
 
         add_idf_sdkconfig_option("CONFIG_LWIP_IP_FORWARD", True)
         add_idf_sdkconfig_option("CONFIG_LWIP_IPV4_NAPT", True)
