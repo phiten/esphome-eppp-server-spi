@@ -1,6 +1,6 @@
 #include "eppp_server.h"
 
-#ifdef USE_ESP_IDF
+#ifdef USE_ESP32
 
 #include "esphome/core/log.h"
 #include "esphome/components/wifi/wifi_component.h"
@@ -116,4 +116,4 @@ void EPPPServerComponent::dump_config() {
 }  // namespace eppp_server
 }  // namespace esphome
 
-#endif  // USE_ESP_IDF
+#endif  // USE_ESP32

@@ -2,7 +2,7 @@
 
 #include "esphome/core/component.h"
 
-#ifdef USE_ESP_IDF
+#ifdef USE_ESP32
 
 #include "esp_netif.h"
 
@@ -43,4 +43,4 @@ class EPPPServerComponent : public Component {
 }  // namespace eppp_server
 }  // namespace esphome
 
-#endif  // USE_ESP_IDF
+#endif  // USE_ESP32

@@ -18,8 +18,11 @@ CONF_HANDSHAKE_PIN = "handshake_pin"
 
 def _require_esp_idf(config):
     # SPI-slave EPPP transport is only available in the esp-idf framework.
-    if not CORE.using_esp_idf:
-        raise cv.Invalid("eppp_server requires 'esp32: framework: type: esp-idf'")
+    # NOTE: CORE.using_esp_idf was removed in ESPHome 2026.6.0 in favor of
+    # CORE.is_esp32 (since Arduino-on-ESP32 is itself built on ESP-IDF now).
+    # "Pure ESP-IDF, no Arduino layer" is expressed as below.
+    if not CORE.is_esp32 or CORE.using_arduino:
+        raise cv.Invalid("eppp_server requires 'esp32: framework: type: esp-idf' (Arduino not supported)")
     return config
 
 
@@ -51,7 +54,7 @@ async def to_code(config):
     # Required lwIP options for PPP-over-SPI + NAT gatewaying.
     # (Kept here so users don't have to remember to set these by hand.)
     cg.add_define("USE_EPPP_SERVER")
-    if CORE.using_esp_idf:
+    if CORE.is_esp32 and not CORE.using_arduino:
         from esphome.components.esp32 import add_idf_sdkconfig_option
 
         add_idf_sdkconfig_option("CONFIG_LWIP_IP_FORWARD", True)
