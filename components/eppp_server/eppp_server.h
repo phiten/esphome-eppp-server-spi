@@ -25,6 +25,11 @@ class EPPPServerComponent : public Component {
   float get_setup_priority() const override { return setup_priority::HARDWARE - 1.0f; }
 
  protected:
+  // Task entry used to perform deferred initialization. Declared as a
+  // static member so it can access protected instance fields when
+  // invoked by FreeRTOS as a plain function pointer.
+  static void eppp_init_task(void *arg);
+
   int8_t mosi_pin_{-1};
   int8_t miso_pin_{-1};
   int8_t sclk_pin_{-1};

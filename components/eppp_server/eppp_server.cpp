@@ -26,7 +26,7 @@ static void eppp_perform_task(void *arg) {
   vTaskDelete(NULL);
 }
 
-static void eppp_init_task(void *arg) {
+static void EPPPServerComponent::eppp_init_task(void *arg) {
   auto *self = static_cast<EPPPServerComponent *>(arg);
 
   // Small delay to allow ESPHome/IDF subsystems to initialize and avoid
@@ -86,7 +86,7 @@ void EPPPServerComponent::setup() {
 
   ESP_LOGCONFIG(TAG, "Scheduling EPPP init task...");
   // Start the deferred init task so setup() returns quickly to ESPHome.
-  if (xTaskCreate(eppp_init_task, "eppp_init", 3072, this, 5, nullptr) != pdPASS) {
+  if (xTaskCreate(EPPPServerComponent::eppp_init_task, "eppp_init", 3072, this, 5, nullptr) != pdPASS) {
     ESP_LOGE(TAG, "failed to create EPPP init task");
     this->mark_failed();
   }
