@@ -26,7 +26,7 @@ static void eppp_perform_task(void *arg) {
   vTaskDelete(NULL);
 }
 
-static void EPPPServerComponent::eppp_init_task(void *arg) {
+void EPPPServerComponent::eppp_init_task(void *arg) {
   auto *self = static_cast<EPPPServerComponent *>(arg);
 
   // Small delay to allow ESPHome/IDF subsystems to initialize and avoid
