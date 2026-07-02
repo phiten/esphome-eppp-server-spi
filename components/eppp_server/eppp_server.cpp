@@ -26,9 +26,70 @@ static void eppp_perform_task(void *arg) {
   vTaskDelete(NULL);
 }
 
+static void eppp_init_task(void *arg) {
+  auto *self = static_cast<EPPPServerComponent *>(arg);
+
+  // Small delay to allow ESPHome/IDF subsystems to initialize and avoid
+  // racing with system queue creation in other components.
+  vTaskDelay(pdMS_TO_TICKS(3000));
+
+  ESP_LOGCONFIG(TAG, "EPPP init task starting...");
+
+  eppp_config_t config = EPPP_DEFAULT_SERVER_CONFIG();
+  config.transport = EPPP_TRANSPORT_SPI;
+  config.spi.host = SPI2_HOST;
+  config.spi.is_master = false;
+  config.spi.mosi = self->mosi_pin_;
+  config.spi.miso = self->miso_pin_;
+  config.spi.sclk = self->sclk_pin_;
+  config.spi.cs = self->cs_pin_;
+  config.spi.intr = self->handshake_pin_;
+  config.spi.freq = 16 * 1000 * 1000;
+  config.spi.input_delay_ns = 0;
+  config.spi.cs_ena_pretrans = 0;
+  config.spi.cs_ena_posttrans = 0;
+
+  // Use library perform task (matching the standalone reference behavior).
+  config.task.run_task = false;
+
+  self->eppp_netif_ = eppp_init(EPPP_SERVER, &config);
+  if (self->eppp_netif_ == nullptr) {
+    ESP_LOGE(TAG, "eppp_init() failed");
+    self->mark_failed();
+    vTaskDelete(NULL);
+    return;
+  }
+
+  if (eppp_netif_start(self->eppp_netif_) != ESP_OK) {
+    ESP_LOGE(TAG, "eppp_netif_start() failed");
+    self->mark_failed();
+    vTaskDelete(NULL);
+    return;
+  }
+
+  if (xTaskCreate(eppp_perform_task, "eppp", 4096, self->eppp_netif_, 5, nullptr) != pdPASS) {
+    ESP_LOGE(TAG, "failed to create EPPP perform task");
+    self->mark_failed();
+    vTaskDelete(NULL);
+    return;
+  }
+
+  ESP_LOGCONFIG(TAG, "EPPP SPI server started from init task");
+
+  self->napt_enabled_ = false;
+
+  vTaskDelete(NULL);
+}
+
 void EPPPServerComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up EPPP SPI server...");
 
+  ESP_LOGCONFIG(TAG, "Scheduling EPPP init task...");
+  // Start the deferred init task so setup() returns quickly to ESPHome.
+  if (xTaskCreate(eppp_init_task, "eppp_init", 3072, this, 5, nullptr) != pdPASS) {
+    ESP_LOGE(TAG, "failed to create EPPP init task");
+    this->mark_failed();
+  }
   // ---------------------------------------------------------------------
   // Use the reference standalone EPPP server defaults, then override the
   // transport-specific SPI fields to match the working main.c implementation.
