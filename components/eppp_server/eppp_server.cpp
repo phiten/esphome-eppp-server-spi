@@ -94,6 +94,17 @@ void EPPPServerComponent::eppp_init_task(void *arg) {
   config.spi.cs_ena_pretrans = 0;
   config.spi.cs_ena_posttrans = 0;
 
+  ESP_LOGI(TAG, "EPPP SPI transport config: host=%d master=%d mosi=%d miso=%d sclk=%d cs=%d intr=%d freq=%uHz delay=%u ns",
+           config.spi.host,
+           config.spi.is_master ? 1 : 0,
+           config.spi.mosi,
+           config.spi.miso,
+           config.spi.sclk,
+           config.spi.cs,
+           config.spi.intr,
+           config.spi.freq,
+           config.spi.input_delay_ns);
+
   // Use library perform task (matching the standalone reference behavior).
   config.task.run_task = false;
 
