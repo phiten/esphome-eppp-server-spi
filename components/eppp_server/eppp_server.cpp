@@ -55,9 +55,16 @@ static void eppp_status_task(void *arg) {
     if (sta_netif)
       esp_netif_get_ip_info(sta_netif, &ip_info);
 
-    ESP_LOGI(TAG, "[up=%lus] eppp=%s wifi=%ddBm ip=" IPSTR " heap=%lu",
+    /* EPPP IP */
+    esp_netif_ip_info_t eppp_ip_info;
+    memset(&eppp_ip_info, 0, sizeof(eppp_ip_info));
+    if (eppp_netif)
+      esp_netif_get_ip_info(eppp_netif, &eppp_ip_info);
+
+    ESP_LOGI(TAG, "[up=%lus] eppp=%s eppp_ip=" IPSTR " wifi=%ddBm ip=" IPSTR " heap=%lu",
              uptime,
              eppp_up ? "UP" : "DOWN",
+             IP2STR(&eppp_ip_info.ip),
              rssi,
              IP2STR(&ip_info.ip),
              heap);
@@ -103,6 +110,16 @@ void EPPPServerComponent::eppp_init_task(void *arg) {
     self->mark_failed();
     vTaskDelete(NULL);
     return;
+  }
+
+  esp_netif_ip_info_t eppp_ip_info;
+  memset(&eppp_ip_info, 0, sizeof(eppp_ip_info));
+  esp_err_t ip_err = esp_netif_get_ip_info(self->eppp_netif_, &eppp_ip_info);
+  if (ip_err == ESP_OK) {
+    ESP_LOGI(TAG, "EPPP interface started, local IP=" IPSTR " netmask=" IPSTR,
+             IP2STR(&eppp_ip_info.ip), IP2STR(&eppp_ip_info.netmask));
+  } else {
+    ESP_LOGW(TAG, "EPPP interface started but ip info unavailable: %s", esp_err_to_name(ip_err));
   }
 
   if (xTaskCreate(eppp_perform_task, "eppp", 4096, self->eppp_netif_, 5, nullptr) != pdPASS) {
