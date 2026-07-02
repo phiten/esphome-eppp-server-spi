@@ -3,7 +3,6 @@
 #ifdef USE_ESP32
 
 #include "esphome/core/log.h"
-#include "esphome/components/wifi/wifi_component.h"
 
 #include "esp_err.h"
 #include "esp_netif_ip_addr.h"  // esp_ip4_addr_t, ESP_IP4TOADDR -- eppp_link.h assumes these are already visible
@@ -63,41 +62,19 @@ void EPPPServerComponent::setup() {
     return;
   }
 
-  ESP_LOGCONFIG(TAG, "EPPP SPI server started, waiting for peer + WiFi uplink");
+  ESP_LOGCONFIG(TAG, "EPPP SPI server started, waiting for peer + uplink");
+
+  esp_err_t err = esp_netif_napt_enable(this->eppp_netif_);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "esp_netif_napt_enable() failed: %s", esp_err_to_name(err));
+  } else {
+    this->napt_enabled_ = true;
+    ESP_LOGI(TAG, "NAT enabled on EPPP interface");
+  }
 }
 
 void EPPPServerComponent::loop() {
-  bool wifi_connected = wifi::global_wifi_component != nullptr && wifi::global_wifi_component->is_connected();
-
-  if (wifi_connected && !this->napt_enabled_) {
-    this->try_enable_napt_();
-  } else if (!wifi_connected && this->napt_enabled_) {
-    ESP_LOGW(TAG, "WiFi uplink lost -- NAT bridge is stale until WiFi reconnects");
-    this->napt_enabled_ = false;
-    // NOTE: intentionally not calling esp_netif_napt_disable() here yet --
-    // confirm experimentally in your Phase 3 testing whether re-enabling
-    // NAPT on reconnect works without an explicit disable first, or
-    // whether that call needs to happen on disconnect too.
-  }
-
-  this->wifi_was_connected_ = wifi_connected;
-}
-
-void EPPPServerComponent::try_enable_napt_() {
-  esp_netif_t *wifi_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-  if (wifi_netif == nullptr) {
-    // WiFi netif not created yet -- will retry next loop() iteration.
-    return;
-  }
-
-  esp_err_t err = esp_netif_napt_enable(wifi_netif);
-  if (err != ESP_OK) {
-    ESP_LOGE(TAG, "esp_netif_napt_enable() failed: %s", esp_err_to_name(err));
-    return;
-  }
-
-  this->napt_enabled_ = true;
-  ESP_LOGI(TAG, "NAT bridge enabled: EPPP peer -> WiFi uplink");
+  // No periodic work is required here for generic EPPP SPI server operation.
 }
 
 void EPPPServerComponent::dump_config() {
@@ -107,6 +84,7 @@ void EPPPServerComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "  SCLK Pin: %d", this->sclk_pin_);
   ESP_LOGCONFIG(TAG, "  CS Pin: %d", this->cs_pin_);
   ESP_LOGCONFIG(TAG, "  Handshake Pin: %d", this->handshake_pin_);
+  ESP_LOGCONFIG(TAG, "  NAT enabled: %s", this->napt_enabled_ ? "yes" : "no");
   if (this->is_failed()) {
     ESP_LOGE(TAG, "  Setup failed!");
   }

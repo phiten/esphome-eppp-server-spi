@@ -21,14 +21,10 @@ class EPPPServerComponent : public Component {
   void loop() override;
   void dump_config() override;
 
-  // Must come up after WiFi has had a chance to start associating, but
-  // doesn't strictly need to wait for an IP -- NAT enabling itself waits
-  // for that separately in loop().
-  float get_setup_priority() const override { return setup_priority::WIFI - 1.0f; }
+  // Must come up before most other components that may provide an uplink.
+  float get_setup_priority() const override { return setup_priority::HARDWARE - 1.0f; }
 
  protected:
-  void try_enable_napt_();
-
   int8_t mosi_pin_{-1};
   int8_t miso_pin_{-1};
   int8_t sclk_pin_{-1};
@@ -37,7 +33,6 @@ class EPPPServerComponent : public Component {
 
   esp_netif_t *eppp_netif_{nullptr};
   bool napt_enabled_{false};
-  bool wifi_was_connected_{false};
 };
 
 }  // namespace eppp_server

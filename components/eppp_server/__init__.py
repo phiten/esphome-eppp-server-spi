@@ -4,7 +4,9 @@ from esphome.const import CONF_ID
 from esphome.core import CORE
 
 #CODEOWNERS = ["@your-github-handle"]
-#DEPENDENCIES = ["wifi"]
+
+# The eppp_server component is intentionally generic and does not require
+# the WiFi component, so it can work with LTE, LoRa, or other uplink paths.
 
 eppp_server_ns = cg.esphome_ns.namespace("eppp_server")
 EPPPServerComponent = eppp_server_ns.class_("EPPPServerComponent", cg.Component)
