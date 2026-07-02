@@ -7,8 +7,6 @@
 #include "esp_err.h"
 #include "esp_netif_ip_addr.h"  // esp_ip4_addr_t, ESP_IP4TOADDR -- eppp_link.h assumes these are already visible
 #include "driver/spi_common.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 
 extern "C" {
 #include "eppp_link.h"
@@ -18,13 +16,6 @@ namespace esphome {
 namespace eppp_server {
 
 static const char *const TAG = "eppp_server";
-
-static void eppp_perform_task(void *arg) {
-  esp_netif_t *netif = static_cast<esp_netif_t *>(arg);
-  while (eppp_perform(netif) != ESP_ERR_TIMEOUT) {
-  }
-  vTaskDelete(NULL);
-}
 
 void EPPPServerComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up EPPP SPI server...");
@@ -48,7 +39,9 @@ void EPPPServerComponent::setup() {
   config.spi.cs_ena_pretrans = 0;
   config.spi.cs_ena_posttrans = 0;
 
-  config.task.run_task = false;
+  config.task.run_task = true;
+  config.task.stack_size = 4096;
+  config.task.priority = 8;
 
   this->eppp_netif_ = eppp_init(EPPP_SERVER, &config);
   if (this->eppp_netif_ == nullptr) {
@@ -59,12 +52,6 @@ void EPPPServerComponent::setup() {
 
   if (eppp_netif_start(this->eppp_netif_) != ESP_OK) {
     ESP_LOGE(TAG, "eppp_netif_start() failed");
-    this->mark_failed();
-    return;
-  }
-
-  if (xTaskCreate(eppp_perform_task, "eppp", 4096, this->eppp_netif_, 5, nullptr) != pdPASS) {
-    ESP_LOGE(TAG, "failed to create EPPP perform task");
     this->mark_failed();
     return;
   }
