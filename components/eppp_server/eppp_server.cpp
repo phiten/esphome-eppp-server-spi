@@ -9,6 +9,8 @@
 #include "driver/spi_common.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_timer.h"
+#include "esp_wifi.h"
 
 extern "C" {
 #include "eppp_link.h"
@@ -24,6 +26,41 @@ static void eppp_perform_task(void *arg) {
   while (eppp_perform(netif) != ESP_ERR_TIMEOUT) {
   }
   vTaskDelete(NULL);
+}
+
+static void eppp_status_task(void *arg) {
+  esp_netif_t *eppp_netif = static_cast<esp_netif_t *>(arg);
+
+  while (1) {
+    vTaskDelay(pdMS_TO_TICKS(10000));
+
+    uint32_t uptime = (uint32_t)(esp_timer_get_time() / 1000000);
+    bool eppp_up = esp_netif_is_netif_up(eppp_netif);
+    uint32_t heap = esp_get_free_heap_size();
+
+    /* WiFi RSSI */
+    int rssi = 0;
+    bool wifi_connected = false;
+    wifi_ap_record_t ap_info;
+    if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+      rssi = ap_info.rssi;
+      wifi_connected = true;
+    }
+
+    /* WiFi IP */
+    esp_netif_ip_info_t ip_info;
+    memset(&ip_info, 0, sizeof(ip_info));
+    esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (sta_netif)
+      esp_netif_get_ip_info(sta_netif, &ip_info);
+
+    ESP_LOGI(TAG, "[up=%lus] eppp=%s wifi=%ddBm ip=" IPSTR " heap=%lu",
+             uptime,
+             eppp_up ? "UP" : "DOWN",
+             rssi,
+             IP2STR(&ip_info.ip),
+             heap);
+  }
 }
 
 void EPPPServerComponent::eppp_init_task(void *arg) {
@@ -77,6 +114,11 @@ void EPPPServerComponent::eppp_init_task(void *arg) {
   ESP_LOGCONFIG(TAG, "EPPP SPI server started from init task");
 
   self->napt_enabled_ = false;
+
+  // Start periodic status logger (helps debug uplink/netif state)
+  if (xTaskCreate(eppp_status_task, "eppp_srv_status", 3072, self->eppp_netif_, 1, nullptr) != pdPASS) {
+    ESP_LOGW(TAG, "failed to create EPPP status task");
+  }
 
   vTaskDelete(NULL);
 }
