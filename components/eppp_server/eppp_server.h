@@ -37,7 +37,7 @@ class EPPPServerComponent : public Component {
   int8_t handshake_pin_{-1};
 
   esp_netif_t *eppp_netif_{nullptr};
-  bool napt_enabled_{false};
+  bool napt_enabled_{true};  // Will be set correctly in init task; default true since we enable it automatically.
 };
 
 }  // namespace eppp_server
