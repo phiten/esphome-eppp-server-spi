@@ -7,6 +7,8 @@
 #include "esp_err.h"
 #include "esp_netif_ip_addr.h"  // esp_ip4_addr_t, ESP_IP4TOADDR -- eppp_link.h assumes these are already visible
 #include "driver/spi_common.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 extern "C" {
 #include "eppp_link.h"
@@ -16,6 +18,13 @@ namespace esphome {
 namespace eppp_server {
 
 static const char *const TAG = "eppp_server";
+
+static void eppp_perform_task(void *arg) {
+  esp_netif_t *netif = static_cast<esp_netif_t *>(arg);
+  while (eppp_perform(netif) != ESP_ERR_TIMEOUT) {
+  }
+  vTaskDelete(NULL);
+}
 
 void EPPPServerComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up EPPP SPI server...");
@@ -39,9 +48,7 @@ void EPPPServerComponent::setup() {
   config.spi.cs_ena_pretrans = 0;
   config.spi.cs_ena_posttrans = 0;
 
-  config.task.run_task = true;
-  config.task.stack_size = 4096;
-  config.task.priority = 8;
+  config.task.run_task = false;
 
   this->eppp_netif_ = eppp_init(EPPP_SERVER, &config);
   if (this->eppp_netif_ == nullptr) {
@@ -56,15 +63,15 @@ void EPPPServerComponent::setup() {
     return;
   }
 
+  if (xTaskCreate(eppp_perform_task, "eppp", 4096, this->eppp_netif_, 5, nullptr) != pdPASS) {
+    ESP_LOGE(TAG, "failed to create EPPP perform task");
+    this->mark_failed();
+    return;
+  }
+
   ESP_LOGCONFIG(TAG, "EPPP SPI server started, waiting for peer + uplink");
 
-  esp_err_t err = esp_netif_napt_enable(this->eppp_netif_);
-  if (err != ESP_OK) {
-    ESP_LOGW(TAG, "esp_netif_napt_enable() failed: %s", esp_err_to_name(err));
-  } else {
-    this->napt_enabled_ = true;
-    ESP_LOGI(TAG, "NAT enabled on EPPP interface");
-  }
+  this->napt_enabled_ = false;
 }
 
 void EPPPServerComponent::loop() {
