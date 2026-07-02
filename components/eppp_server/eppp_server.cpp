@@ -55,16 +55,20 @@ static void eppp_status_task(void *arg) {
     if (sta_netif)
       esp_netif_get_ip_info(sta_netif, &ip_info);
 
-    /* EPPP IP */
+    /* EPPP IP and peer info */
     esp_netif_ip_info_t eppp_ip_info;
     memset(&eppp_ip_info, 0, sizeof(eppp_ip_info));
     if (eppp_netif)
       esp_netif_get_ip_info(eppp_netif, &eppp_ip_info);
 
-    ESP_LOGI(TAG, "[up=%lus] eppp=%s eppp_ip=" IPSTR " wifi=%ddBm ip=" IPSTR " heap=%lu",
+    bool eppp_session_active = eppp_up && eppp_ip_info.gw.u_addr.ip4.addr != 0;
+
+    ESP_LOGI(TAG, "[up=%lus] eppp_netif=%s eppp_session=%s local=" IPSTR " peer=" IPSTR " wifi=%ddBm ip=" IPSTR " heap=%lu",
              uptime,
              eppp_up ? "UP" : "DOWN",
+             eppp_session_active ? "ACTIVE" : "inactive",
              IP2STR(&eppp_ip_info.ip),
+             IP2STR(&eppp_ip_info.gw),
              rssi,
              IP2STR(&ip_info.ip),
              heap);
@@ -127,8 +131,8 @@ void EPPPServerComponent::eppp_init_task(void *arg) {
   memset(&eppp_ip_info, 0, sizeof(eppp_ip_info));
   esp_err_t ip_err = esp_netif_get_ip_info(self->eppp_netif_, &eppp_ip_info);
   if (ip_err == ESP_OK) {
-    ESP_LOGI(TAG, "EPPP interface started, local IP=" IPSTR " netmask=" IPSTR,
-             IP2STR(&eppp_ip_info.ip), IP2STR(&eppp_ip_info.netmask));
+    ESP_LOGI(TAG, "EPPP interface started, local IP=" IPSTR " netmask=" IPSTR " peer=" IPSTR,
+             IP2STR(&eppp_ip_info.ip), IP2STR(&eppp_ip_info.netmask), IP2STR(&eppp_ip_info.gw));
   } else {
     ESP_LOGW(TAG, "EPPP interface started but ip info unavailable: %s", esp_err_to_name(ip_err));
   }
