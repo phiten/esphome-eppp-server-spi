@@ -12,6 +12,7 @@
 #include "freertos/task.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
+#include <atomic>
 
 extern "C" {
 #include "eppp_link.h"
@@ -21,10 +22,22 @@ namespace esphome {
 namespace eppp_server {
 
 static const char *const TAG = "eppp_server";
+static std::atomic<int> eppp_perform_successes{0};
+static std::atomic<int> eppp_perform_errors{0};
 
 static void eppp_perform_task(void *arg) {
   esp_netif_t *netif = static_cast<esp_netif_t *>(arg);
-  while (eppp_perform(netif) != ESP_ERR_TIMEOUT) {
+  while (true) {
+    esp_err_t err = eppp_perform(netif);
+    if (err == ESP_ERR_TIMEOUT) {
+      break;
+    }
+    if (err == ESP_OK) {
+      eppp_perform_successes.fetch_add(1, std::memory_order_relaxed);
+    } else {
+      eppp_perform_errors.fetch_add(1, std::memory_order_relaxed);
+      ESP_LOGW(TAG, "eppp_perform() error: %s", esp_err_to_name(err));
+    }
   }
   vTaskDelete(NULL);
 }
@@ -61,14 +74,23 @@ static void eppp_status_task(void *arg) {
     if (eppp_netif)
       esp_netif_get_ip_info(eppp_netif, &eppp_ip_info);
 
-    bool eppp_session_active = eppp_up && eppp_ip_info.gw.addr != 0;
+    const int success_count = eppp_perform_successes.load(std::memory_order_relaxed);
+    const int error_count = eppp_perform_errors.load(std::memory_order_relaxed);
+    const char *session_state = "unknown";
+    if (success_count > 0 && error_count == 0) {
+      session_state = "ACTIVE";
+    } else if (error_count > 0) {
+      session_state = "ERROR";
+    }
 
-    ESP_LOGI(TAG, "[up=%lus] eppp_netif=%s eppp_session=%s local=" IPSTR " peer=" IPSTR " wifi=%ddBm ip=" IPSTR " heap=%lu",
+    ESP_LOGI(TAG, "[up=%lus] eppp_netif=%s eppp_session=%s local=" IPSTR " peer=" IPSTR " perf_ok=%d perf_err=%d wifi=%ddBm ip=" IPSTR " heap=%lu",
              uptime,
              eppp_up ? "UP" : "DOWN",
-             eppp_session_active ? "ACTIVE" : "inactive",
+             session_state,
              IP2STR(&eppp_ip_info.ip),
              IP2STR(&eppp_ip_info.gw),
+             success_count,
+             error_count,
              rssi,
              IP2STR(&ip_info.ip),
              heap);
