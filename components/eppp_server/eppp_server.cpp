@@ -5,6 +5,7 @@
 #include "esphome/core/log.h"
 
 #include "esp_err.h"
+#include "esp_netif.h"
 #include "esp_netif_ip_addr.h"  // esp_ip4_addr_t, ESP_IP4TOADDR -- eppp_link.h assumes these are already visible
 #include "driver/spi_common.h"
 #include "freertos/FreeRTOS.h"
@@ -113,7 +114,14 @@ void EPPPServerComponent::eppp_init_task(void *arg) {
 
   ESP_LOGCONFIG(TAG, "EPPP SPI server started from init task");
 
-  self->napt_enabled_ = false;
+  esp_err_t nat_err = esp_netif_napt_enable(self->eppp_netif_);
+  if (nat_err != ESP_OK) {
+    ESP_LOGW(TAG, "esp_netif_napt_enable() failed: %s", esp_err_to_name(nat_err));
+    self->napt_enabled_ = false;
+  } else {
+    self->napt_enabled_ = true;
+    ESP_LOGI(TAG, "NAT enabled on EPPP interface");
+  }
 
   // Start periodic status logger (helps debug uplink/netif state)
   if (xTaskCreate(eppp_status_task, "eppp_srv_status", 3072, self->eppp_netif_, 1, nullptr) != pdPASS) {
