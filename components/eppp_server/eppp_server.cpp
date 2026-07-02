@@ -90,49 +90,8 @@ void EPPPServerComponent::setup() {
     ESP_LOGE(TAG, "failed to create EPPP init task");
     this->mark_failed();
   }
-  // ---------------------------------------------------------------------
-  // Use the reference standalone EPPP server defaults, then override the
-  // transport-specific SPI fields to match the working main.c implementation.
-  // ---------------------------------------------------------------------
-  eppp_config_t config = EPPP_DEFAULT_SERVER_CONFIG();
-
-  config.transport = EPPP_TRANSPORT_SPI;
-  config.spi.host = SPI2_HOST;  // SPI2_HOST/HSPI -- matches the reference implementation
-  config.spi.is_master = false;  // this device is the SPI SLAVE: the external MCU drives the bus
-  config.spi.mosi = this->mosi_pin_;
-  config.spi.miso = this->miso_pin_;
-  config.spi.sclk = this->sclk_pin_;
-  config.spi.cs = this->cs_pin_;
-  config.spi.intr = this->handshake_pin_;  // data-ready/handshake line, slave -> master
-  config.spi.freq = 16 * 1000 * 1000;      // matches eppp_link's own default; lower if you see errors
-  config.spi.input_delay_ns = 0;
-  config.spi.cs_ena_pretrans = 0;
-  config.spi.cs_ena_posttrans = 0;
-
-  config.task.run_task = false;
-
-  this->eppp_netif_ = eppp_init(EPPP_SERVER, &config);
-  if (this->eppp_netif_ == nullptr) {
-    ESP_LOGE(TAG, "eppp_init() failed");
-    this->mark_failed();
-    return;
-  }
-
-  if (eppp_netif_start(this->eppp_netif_) != ESP_OK) {
-    ESP_LOGE(TAG, "eppp_netif_start() failed");
-    this->mark_failed();
-    return;
-  }
-
-  if (xTaskCreate(eppp_perform_task, "eppp", 4096, this->eppp_netif_, 5, nullptr) != pdPASS) {
-    ESP_LOGE(TAG, "failed to create EPPP perform task");
-    this->mark_failed();
-    return;
-  }
-
-  ESP_LOGCONFIG(TAG, "EPPP SPI server started, waiting for peer + uplink");
-
-  this->napt_enabled_ = false;
+  // Defer all EPPP initialization to the init task above.
+  return;
 }
 
 void EPPPServerComponent::loop() {
