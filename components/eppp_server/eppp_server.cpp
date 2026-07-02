@@ -61,7 +61,7 @@ static void eppp_status_task(void *arg) {
     if (eppp_netif)
       esp_netif_get_ip_info(eppp_netif, &eppp_ip_info);
 
-    bool eppp_session_active = eppp_up && eppp_ip_info.gw.u_addr.ip4.addr != 0;
+    bool eppp_session_active = eppp_up && eppp_ip_info.gw.addr != 0;
 
     ESP_LOGI(TAG, "[up=%lus] eppp_netif=%s eppp_session=%s local=" IPSTR " peer=" IPSTR " wifi=%ddBm ip=" IPSTR " heap=%lu",
              uptime,
