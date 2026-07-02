@@ -6,6 +6,8 @@
 
 #include "esp_err.h"
 #include "esp_netif_ip_addr.h"  // esp_ip4_addr_t, ESP_IP4TOADDR -- eppp_link.h assumes these are already visible
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 extern "C" {
 #include "eppp_link.h"
@@ -16,19 +18,24 @@ namespace eppp_server {
 
 static const char *const TAG = "eppp_server";
 
+static void eppp_perform_task(void *arg) {
+  esp_netif_t *netif = static_cast<esp_netif_t *>(arg);
+  while (eppp_perform(netif) != ESP_ERR_TIMEOUT) {
+  }
+  vTaskDelete(NULL);
+}
+
 void EPPPServerComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up EPPP SPI server...");
 
   // ---------------------------------------------------------------------
-  // Struct fields confirmed from the vendored eppp_link.h / eppp_transport_spi.h
-  // (espressif/eppp_link, as fetched into managed_components/).
+  // Use the reference standalone EPPP server defaults, then override the
+  // transport-specific SPI fields to match the working main.c implementation.
   // ---------------------------------------------------------------------
-  eppp_config_t config = {};  // zero-init: unset fields (e.g. is_master) default sanely
+  eppp_config_t config = EPPP_DEFAULT_SERVER_CONFIG();
 
   config.transport = EPPP_TRANSPORT_SPI;
-
-  config.spi.host = 1;  // SPI2_HOST/HSPI -- matches eppp_link's own default; adjust if your
-                         // Phase-0 firmware used a different SPI peripheral
+  config.spi.host = SPI2_HOST;  // SPI2_HOST/HSPI -- matches the reference implementation
   config.spi.is_master = false;  // this device is the SPI SLAVE: the external MCU drives the bus
   config.spi.mosi = this->mosi_pin_;
   config.spi.miso = this->miso_pin_;
@@ -40,14 +47,7 @@ void EPPPServerComponent::setup() {
   config.spi.cs_ena_pretrans = 0;
   config.spi.cs_ena_posttrans = 0;
 
-  config.task.run_task = true;
-  config.task.stack_size = 4096;
-  config.task.priority = 8;
-
-  config.ppp.our_ip4_addr.addr = EPPP_DEFAULT_SERVER_IP();
-  config.ppp.their_ip4_addr.addr = EPPP_DEFAULT_CLIENT_IP();
-  config.ppp.netif_prio = 0;
-  config.ppp.netif_description = nullptr;
+  config.task.run_task = false;
 
   this->eppp_netif_ = eppp_init(EPPP_SERVER, &config);
   if (this->eppp_netif_ == nullptr) {
@@ -58,6 +58,12 @@ void EPPPServerComponent::setup() {
 
   if (eppp_netif_start(this->eppp_netif_) != ESP_OK) {
     ESP_LOGE(TAG, "eppp_netif_start() failed");
+    this->mark_failed();
+    return;
+  }
+
+  if (xTaskCreate(eppp_perform_task, "eppp", 4096, this->eppp_netif_, 5, nullptr) != pdPASS) {
+    ESP_LOGE(TAG, "failed to create EPPP perform task");
     this->mark_failed();
     return;
   }
